@@ -5,13 +5,13 @@ const express = require("express");
 const app = express();
 const httpServer = http.createServer(app);
 
-app.get("/", (req, res) => res.send("✅ SyncFhams USER-SYSTEM SERVER ACTIVE"));
+app.get("/", (req, res) => res.send("✅ SyncFhams SERVER AKTİF (User System)"));
 
 const io = new Server(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// Odaları ve Şifreleri Tutan Hafıza
+// ODA HAFIZASI
 // Yapı: { "odaAdi": { pass: "123", users: [] } }
 const rooms = {}; 
 
@@ -21,66 +21,78 @@ io.on("connection", (socket) => {
   socket.currentRoom = null;
   socket.username = null;
 
-  // --- ODA OLUŞTURMA ---
+  // --- 1. ODA OLUŞTURMA ---
   socket.on("CREATE_ROOM", ({ roomName, password, username }) => {
+    // Oda zaten var mı kontrol et
     if (rooms[roomName]) {
-      socket.emit("JOIN_ERROR", "⚠️ Bu isimde bir oda zaten var! Katılmayı deneyin.");
+      // Eğer oda varsa hata gönder
+      socket.emit("JOIN_ERROR", "⚠️ Bu isimde bir oda zaten var! Giriş yapmayı dene.");
     } else {
-      // Odayı kur
+      // Odayı oluştur
       rooms[roomName] = { pass: password, users: [] };
-      joinRoomLogic(socket, roomName, username);
-      socket.emit("JOIN_SUCCESS", "Oda başarıyla oluşturuldu.");
+      console.log(`[YENİ ODA] ${roomName} (Kurucu: ${username})`);
+      
+      // Kullanıcıyı içeri al
+      joinUserToRoom(socket, roomName, username);
+      socket.emit("JOIN_SUCCESS", "Oda başarıyla kuruldu.");
     }
   });
 
-  // --- ODAYA KATILMA ---
+  // --- 2. ODAYA GİRİŞ ---
   socket.on("JOIN_ROOM", ({ roomName, password, username }) => {
+    // Oda var mı?
     if (!rooms[roomName]) {
       socket.emit("JOIN_ERROR", "❌ Böyle bir oda bulunamadı.");
-    } else if (rooms[roomName].pass !== password) {
+    } 
+    // Şifre doğru mu?
+    else if (rooms[roomName].pass !== password) {
       socket.emit("JOIN_ERROR", "🔒 Şifre hatalı!");
-    } else {
-      joinRoomLogic(socket, roomName, username);
+    } 
+    // Her şey tamamsa içeri al
+    else {
+      joinUserToRoom(socket, roomName, username);
       socket.emit("JOIN_SUCCESS", "Giriş başarılı.");
     }
   });
 
-  // Ortak Giriş Mantığı
-  function joinRoomLogic(socket, roomName, username) {
-    socket.join(roomName);
-    socket.currentRoom = roomName;
-    socket.username = username;
+  // Ortak Giriş Fonksiyonu
+  function joinUserToRoom(socket, room, user) {
+    socket.join(room);
+    socket.currentRoom = room;
+    socket.username = user;
 
-    // Kullanıcıyı listeye ekle
-    if(rooms[roomName]) {
-        rooms[roomName].users.push(username);
+    // Kullanıcı listesine ekle (Aynı isimde varsa ekleme)
+    if (!rooms[room].users.includes(user)) {
+      rooms[room].users.push(user);
     }
 
     // Odadaki herkese güncel listeyi gönder
-    io.to(roomName).emit("UPDATE_USER_LIST", rooms[roomName].users);
+    io.to(room).emit("UPDATE_USER_LIST", rooms[room].users);
   }
 
-  // --- AKSİYONLAR ---
+  // --- VİDEO EYLEMLERİ ---
   socket.on("ACTION", (data) => {
     if (socket.currentRoom) {
       socket.to(socket.currentRoom).emit("SYNC_ACTION", data);
     }
   });
 
-  // --- KOPMA VE LİSTE GÜNCELLEME ---
+  // --- ÇIKIŞ VE TEMİZLİK ---
   socket.on("disconnect", () => {
-    const roomName = socket.currentRoom;
-    if (roomName && rooms[roomName]) {
-      // Kullanıcıyı listeden sil
-      rooms[roomName].users = rooms[roomName].users.filter(u => u !== socket.username);
-      
-      // Kalanlara yeni listeyi gönder
-      io.to(roomName).emit("UPDATE_USER_LIST", rooms[roomName].users);
+    const r = socket.currentRoom;
+    const u = socket.username;
 
-      // Oda boşaldıysa sil
-      if (rooms[roomName].users.length === 0) {
-        delete rooms[roomName];
-        console.log(`🗑️ Oda silindi: ${roomName}`);
+    if (r && rooms[r]) {
+      // Kullanıcıyı listeden sil
+      rooms[r].users = rooms[r].users.filter(user => user !== u);
+      
+      // Kalanlara yeni listeyi yolla
+      io.to(r).emit("UPDATE_USER_LIST", rooms[r].users);
+
+      // Oda tamamen boşaldıysa odayı sil
+      if (rooms[r].users.length === 0) {
+        delete rooms[r];
+        console.log(`🗑️ Oda Silindi: ${r}`);
       }
     }
   });
