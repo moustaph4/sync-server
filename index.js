@@ -5,7 +5,7 @@ const express = require("express");
 const app = express();
 const httpServer = http.createServer(app);
 
-app.get("/", (req, res) => res.send("✅ SyncFhams PRO SUNUCU AKTİF!"));
+app.get("/", (req, res) => res.send("✅ SyncFhams PRO SUNUCU (TEMİZLİK MODU) AKTİF!"));
 
 const io = new Server(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] }
@@ -22,29 +22,26 @@ io.on("connection", (socket) => {
 
   // --- 1. ODA OLUŞTURMA İSTEĞİ ---
   socket.on("CREATE_ROOM", ({ roomName, password }) => {
+    // Eğer oda zaten varsa ve içi doluysa hata ver
     if (rooms[roomName]) {
-      // Oda zaten varsa hata ver
-      socket.emit("JOIN_ERROR", "⚠️ Bu isimde bir oda zaten var! Katılmayı deneyin.");
+      socket.emit("JOIN_ERROR", "⚠️ Bu isimde bir oda zaten var! 'Odaya Katıl' sekmesini kullanın.");
     } else {
       // Yeni oda oluştur
       rooms[roomName] = password;
       socket.join(roomName);
       socket.currentRoom = roomName;
-      socket.emit("JOIN_SUCCESS", "Oda başarıyla oluşturuldu! Arkadaşlarını davet et.");
-      console.log(`[OLUŞTURULDU] ${roomName}`);
+      socket.emit("JOIN_SUCCESS", "Oda oluşturuldu! Arkadaşlarını bekle.");
+      console.log(`[OLUŞTURULDU] ${roomName} (Şifre: ${password})`);
     }
   });
 
   // --- 2. ODAYA KATILMA İSTEĞİ ---
   socket.on("JOIN_ROOM", ({ roomName, password }) => {
     if (!rooms[roomName]) {
-      // Oda yoksa hata ver
-      socket.emit("JOIN_ERROR", "❌ Böyle bir oda bulunamadı!");
+      socket.emit("JOIN_ERROR", "❌ Böyle bir oda yok! Önce oluşturmalısın.");
     } else if (rooms[roomName] !== password) {
-      // Şifre yanlışsa hata ver
       socket.emit("JOIN_ERROR", "🔒 Yanlış Şifre!");
     } else {
-      // Başarılı giriş
       socket.join(roomName);
       socket.currentRoom = roomName;
       socket.emit("JOIN_SUCCESS", "Odaya giriş yapıldı!");
@@ -59,8 +56,22 @@ io.on("connection", (socket) => {
     }
   });
 
+  // --- 🧹 OTOMATİK TEMİZLİK SİSTEMİ ---
   socket.on("disconnect", () => {
-    // İsteğe bağlı: Oda boşalınca silinebilir ama şimdilik kalsın.
+    const roomName = socket.currentRoom;
+    
+    if (roomName) {
+      console.log(`[AYRILDI] ${socket.id} -> ${roomName}`);
+      
+      // Odada kimse kaldı mı diye kontrol et
+      const room = io.sockets.adapter.rooms.get(roomName);
+      
+      if (!room || room.size === 0) {
+        // Kimse kalmadıysa odayı sil
+        delete rooms[roomName];
+        console.log(`[SİLİNDİ] ${roomName} odası boşaldığı için silindi.`);
+      }
+    }
   });
 });
 
