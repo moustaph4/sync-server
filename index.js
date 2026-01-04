@@ -5,61 +5,62 @@ const express = require("express");
 const app = express();
 const httpServer = http.createServer(app);
 
-// Web Arayüzü
-app.get("/", (req, res) => {
-  res.send("✅ SyncFhams ODA SİSTEMLİ SUNUCU AKTİF!");
-});
+app.get("/", (req, res) => res.send("✅ SyncFhams PRO SUNUCU AKTİF!"));
 
 const io = new Server(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// Odaları Hafızada Tutalım
-// Örnek yapı: { "sinema1": "1234", "korku_gecesi": "sifre" }
+// Odaları Hafızada Tut
 const rooms = {}; 
 
 console.log("🚀 Sunucu Başlatıldı...");
 
 io.on("connection", (socket) => {
   console.log("👤 Bağlantı:", socket.id);
-  
-  // Kullanıcının hangi odada olduğunu takip etmek için
   socket.currentRoom = null;
 
-  // ODAYA KATILMA İSTEĞİ
-  socket.on("JOIN_ROOM", ({ roomName, password }) => {
-    // 1. Oda yoksa oluştur
-    if (!rooms[roomName]) {
+  // --- 1. ODA OLUŞTURMA İSTEĞİ ---
+  socket.on("CREATE_ROOM", ({ roomName, password }) => {
+    if (rooms[roomName]) {
+      // Oda zaten varsa hata ver
+      socket.emit("JOIN_ERROR", "⚠️ Bu isimde bir oda zaten var! Katılmayı deneyin.");
+    } else {
+      // Yeni oda oluştur
       rooms[roomName] = password;
       socket.join(roomName);
       socket.currentRoom = roomName;
-      socket.emit("JOIN_SUCCESS", "Oda oluşturuldu ve girildi!");
-      console.log(`[YENİ ODA] ${roomName} (Şifre: ${password})`);
-    } 
-    // 2. Oda varsa şifreyi kontrol et
-    else if (rooms[roomName] === password) {
-      socket.join(roomName);
-      socket.currentRoom = roomName;
-      socket.emit("JOIN_SUCCESS", "Odaya başarıyla katılındı!");
-      console.log(`[KATILIM] ${socket.id} -> ${roomName}`);
-    } 
-    // 3. Şifre yanlışsa
-    else {
-      socket.emit("JOIN_ERROR", "❌ Hatalı Oda Şifresi!");
+      socket.emit("JOIN_SUCCESS", "Oda başarıyla oluşturuldu! Arkadaşlarını davet et.");
+      console.log(`[OLUŞTURULDU] ${roomName}`);
     }
   });
 
-  // AKSİYON (Play/Pause)
+  // --- 2. ODAYA KATILMA İSTEĞİ ---
+  socket.on("JOIN_ROOM", ({ roomName, password }) => {
+    if (!rooms[roomName]) {
+      // Oda yoksa hata ver
+      socket.emit("JOIN_ERROR", "❌ Böyle bir oda bulunamadı!");
+    } else if (rooms[roomName] !== password) {
+      // Şifre yanlışsa hata ver
+      socket.emit("JOIN_ERROR", "🔒 Yanlış Şifre!");
+    } else {
+      // Başarılı giriş
+      socket.join(roomName);
+      socket.currentRoom = roomName;
+      socket.emit("JOIN_SUCCESS", "Odaya giriş yapıldı!");
+      console.log(`[KATILIM] ${socket.id} -> ${roomName}`);
+    }
+  });
+
+  // --- AKSİYONLAR ---
   socket.on("ACTION", (data) => {
-    // Sadece kullanıcının olduğu odaya yayın yap
     if (socket.currentRoom) {
       socket.to(socket.currentRoom).emit("SYNC_ACTION", data);
-      console.log(`⚡ Eylem (${data.type}) -> Oda: ${socket.currentRoom}`);
     }
   });
 
   socket.on("disconnect", () => {
-    // Oda temizliği yapılabilir (Gerekirse)
+    // İsteğe bağlı: Oda boşalınca silinebilir ama şimdilik kalsın.
   });
 });
 
