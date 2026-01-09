@@ -80,5 +80,11 @@ io.on("connection", (socket) => {
   });
 });
 
+// index.js EN ALT SATIRI
+
 const PORT = process.env.PORT || 3000;
-httpServer.listen(PORT, () => console.log(`Sunucu ${PORT} portunda.`));
+
+// '0.0.0.0' ekleyerek dış dünyaya açıyoruz
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Sunucu ${PORT} portunda başlatıldı.`);
+});
