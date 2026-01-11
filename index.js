@@ -5,7 +5,7 @@ const express = require("express");
 const app = express();
 const httpServer = http.createServer(app);
 
-app.get("/", (req, res) => res.send("✅ SYNC FHAMS SUNUCU AKTİF!"));
+app.get("/", (req, res) => res.send("✅ SyncFhams ODA SİSTEMLİ SERVER AKTİF!"));
 
 const io = new Server(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] },
@@ -80,11 +80,5 @@ io.on("connection", (socket) => {
   });
 });
 
-// index.js EN ALT SATIRI
-
 const PORT = process.env.PORT || 3000;
-
-// '0.0.0.0' ekleyerek dış dünyaya açıyoruz
-httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Sunucu ${PORT} portunda başlatıldı.`);
-});
+httpServer.listen(PORT, () => console.log(`Sunucu ${PORT} portunda.`));
