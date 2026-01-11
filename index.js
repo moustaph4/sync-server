@@ -5,16 +5,16 @@ const express = require("express");
 const app = express();
 const httpServer = http.createServer(app);
 
-app.get("/", (req, res) => res.send("✅ SyncFhams ODA SİSTEMLİ SERVER AKTİF!"));
+app.get("/", (req, res) => res.send("✅ SYNC FHAMS SUNUCU AKTİF!"));
 
 const io = new Server(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] },
-  // 👇 BU İKİ AYAR BAĞLANTIYI CANLI TUTAR 👇
-  pingTimeout: 60000, // 60 saniye cevap gelmezse koptu say (Tolerans yüksek)
-  pingInterval: 10000 // Her 10 saniyede bir "Orada mısın?" sinyali gönder (Sık sık)
+  // 👇 Bağlantıyı canlı tutan ayarların (Aynen korundu)
+  pingTimeout: 60000, 
+  pingInterval: 10000 
 });
 
-// Odaları Tutan Hafıza: { "odaAdi": { pass: "123", users: [] } }
+// Odaları Tutan Hafıza
 const rooms = {}; 
 
 console.log("🚀 Sunucu Başlatıldı...");
@@ -26,7 +26,8 @@ io.on("connection", (socket) => {
   // --- ODA OLUŞTURMA ---
   socket.on("CREATE_ROOM", ({ roomName, password, username }) => {
     if (rooms[roomName]) {
-      socket.emit("JOIN_ERROR", "⚠️ Bu isimde bir oda zaten var! Giriş Yap sekmesini kullanın.");
+      // 👇 İSTEDİĞİN KISA MESAJ BURAYA EKLENDİ
+      socket.emit("JOIN_ERROR", "⚠️ BU ODA İSMİ KULLANILIYOR");
     } else {
       rooms[roomName] = { pass: password, users: [] };
       joinLogic(socket, roomName, username);
@@ -59,10 +60,16 @@ io.on("connection", (socket) => {
     io.to(room).emit("UPDATE_USER_LIST", rooms[room].users);
   }
 
-  // --- VİDEO EYLEMLERİ ---
+  // --- VİDEO EYLEMLERİ (ÖNEMLİ GÜNCELLEME) ---
   socket.on("ACTION", (data) => {
     if (socket.currentRoom) {
-      socket.to(socket.currentRoom).emit("SYNC_ACTION", data);
+      // 👇 BURASI DEĞİŞTİ: Veriye 'username' ekliyoruz ki kimin bastığı görünsün
+      const payload = { 
+        ...data, 
+        username: socket.username 
+      };
+      
+      socket.to(socket.currentRoom).emit("SYNC_ACTION", payload);
     }
   });
 
@@ -80,11 +87,9 @@ io.on("connection", (socket) => {
   });
 });
 
-// index.js EN ALT SATIRI
-
 const PORT = process.env.PORT || 3000;
 
-// '0.0.0.0' ekleyerek dış dünyaya açıyoruz
+// '0.0.0.0' ayarın aynen korundu
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Sunucu ${PORT} portunda başlatıldı.`);
 });
