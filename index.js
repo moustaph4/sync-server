@@ -11,7 +11,7 @@ const io = new Server(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] },
   // 👇 BU İKİ AYAR BAĞLANTIYI CANLI TUTAR 👇
   pingTimeout: 60000, // 60 saniye cevap gelmezse koptu say (Tolerans yüksek)
-  pingInterval: 10000 // Her 10 saniyede bir "Orada mısın?" sinyali gönder (Sık sık)
+  pingInterval: 25000 // Her 10 saniyede bir "Orada mısın?" sinyali gönder (Sık sık)
 });
 
 // Odaları Tutan Hafıza: { "odaAdi": { pass: "123", users: [] } }
