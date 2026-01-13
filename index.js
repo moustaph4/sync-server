@@ -5,16 +5,16 @@ const express = require("express");
 const app = express();
 const httpServer = http.createServer(app);
 
-app.get("/", (req, res) => res.send("✅ SYNC FHAMS SUNUCU AKTİF!"));
+app.get("/", (req, res) => res.send("✅ SYNC FHAMS SUNUCU AKTİF!!"));
 
 const io = new Server(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] },
-  // 👇 BU İKİ AYAR BAĞLANTIYI CANLI TUTAR 👇
-  pingTimeout: 60000, // 60 saniye cevap gelmezse koptu say (Tolerans yüksek)
-  pingInterval: 25000 // Her 10 saniyede bir "Orada mısın?" sinyali gönder (Sık sık)
+  // 👇 Bağlantı kopmalarını önlemek için hem WebSocket hem Polling açtık
+  transports: ['websocket', 'polling'], 
+  pingTimeout: 60000, // 60 sn
+  pingInterval: 25000 // 25 sn
 });
 
-// Odaları Tutan Hafıza: { "odaAdi": { pass: "123", users: [] } }
 const rooms = {}; 
 
 console.log("🚀 Sunucu Başlatıldı...");
@@ -26,23 +26,24 @@ io.on("connection", (socket) => {
   // --- ODA OLUŞTURMA ---
   socket.on("CREATE_ROOM", ({ roomName, password, username }) => {
     if (rooms[roomName]) {
-      socket.emit("JOIN_ERROR", "⚠️ Bu isimde bir oda zaten var! Giriş Yap sekmesini kullanın.");
+      // Hata mesajını kısa ve net tuttuk
+      socket.emit("JOIN_ERROR", "⚠️ BU ODA İSMİ KULLANILIYOR");
     } else {
       rooms[roomName] = { pass: password, users: [] };
       joinLogic(socket, roomName, username);
-      socket.emit("JOIN_SUCCESS", "Oda Başarıyla Oluşturuldu!");
+      socket.emit("JOIN_SUCCESS", "ODA OLUŞTURULDU");
     }
   });
 
   // --- ODAYA KATILMA ---
   socket.on("JOIN_ROOM", ({ roomName, password, username }) => {
     if (!rooms[roomName]) {
-      socket.emit("JOIN_ERROR", "❌ Böyle bir oda bulunamadı.");
+      socket.emit("JOIN_ERROR", "❌ BÖYLE BİR ODA YOK");
     } else if (rooms[roomName].pass !== password) {
-      socket.emit("JOIN_ERROR", "🔒 Şifre Hatalı!");
+      socket.emit("JOIN_ERROR", "🔒 ŞİFRE HATALI");
     } else {
       joinLogic(socket, roomName, username);
-      socket.emit("JOIN_SUCCESS", "Odaya Giriş Yapıldı!");
+      socket.emit("JOIN_SUCCESS", "GİRİŞ BAŞARILI");
     }
   });
 
@@ -55,13 +56,13 @@ io.on("connection", (socket) => {
     if (!rooms[room].users.includes(user)) {
       rooms[room].users.push(user);
     }
-    // Herkese güncel listeyi at
     io.to(room).emit("UPDATE_USER_LIST", rooms[room].users);
   }
 
-  // --- VİDEO EYLEMLERİ ---
+  // --- VİDEO EYLEMLERİ (SADE) ---
   socket.on("ACTION", (data) => {
     if (socket.currentRoom) {
+      // Veriyi değiştirmeden olduğu gibi iletiyoruz (İsim ekleme yok)
       socket.to(socket.currentRoom).emit("SYNC_ACTION", data);
     }
   });
@@ -80,11 +81,8 @@ io.on("connection", (socket) => {
   });
 });
 
-// index.js EN ALT SATIRI
-
 const PORT = process.env.PORT || 3000;
 
-// '0.0.0.0' ekleyerek dış dünyaya açıyoruz
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Sunucu ${PORT} portunda başlatıldı.`);
 });
