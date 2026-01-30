@@ -5,10 +5,11 @@ const express = require("express");
 const app = express();
 const httpServer = http.createServer(app);
 
-app.get("/", (req, res) => res.send("✅ SyncFhams PRO SERVER (CHAT+SYNC)"));
+app.get("/", (req, res) => res.send("✅ SyncFhams CHAT SERVER AKTİF"));
 
 const io = new Server(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] },
+  transports: ['websocket', 'polling'], // Garantili bağlantı
   pingTimeout: 60000,
   pingInterval: 25000
 });
@@ -21,7 +22,7 @@ io.on("connection", (socket) => {
   socket.currentRoom = null;
   socket.username = null;
 
-  // --- ODA YÖNETİMİ ---
+  // --- ODA OLUŞTURMA ---
   socket.on("CREATE_ROOM", ({ roomName, password, username }) => {
     if (rooms[roomName]) {
       socket.emit("JOIN_ERROR", "⚠️ BU ODA İSMİ KULLANILIYOR");
@@ -32,6 +33,7 @@ io.on("connection", (socket) => {
     }
   });
 
+  // --- ODAYA KATILMA ---
   socket.on("JOIN_ROOM", ({ roomName, password, username }) => {
     if (!rooms[roomName]) {
       socket.emit("JOIN_ERROR", "❌ BÖYLE BİR ODA YOK");
@@ -54,18 +56,16 @@ io.on("connection", (socket) => {
   // --- VİDEO EYLEMLERİ ---
   socket.on("ACTION", (data) => {
     if (socket.currentRoom) {
-      // Kimin yaptığını ekleyip gönderiyoruz
       const payload = { ...data, username: socket.username };
       socket.to(socket.currentRoom).emit("SYNC_ACTION", payload);
     }
   });
 
-  // --- 🔥 YENİ: SOHBET MESAJI ---
+  // --- SOHBET ---
   socket.on("CHAT_MESSAGE", (msgText) => {
     if (socket.currentRoom && socket.username) {
-        // Mesajı odadaki herkese (kendisi dahil) gönder
-        // Zaman damgası ekliyoruz
         const msgData = {
+            id: Date.now() + Math.random(), // Benzersiz ID (Düplike engellemek için)
             user: socket.username,
             text: msgText,
             time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
