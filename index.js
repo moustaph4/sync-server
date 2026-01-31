@@ -43,10 +43,16 @@ io.on("connection", (socket) => {
     socket.join(room);
     socket.currentRoom = room;
     socket.username = user;
-    if (!rooms[room].users.includes(user)) {
-      rooms[room].users.push(user);
-    }
+    
+    // Önce kullanıcıyı listeden çıkar (varsa)
+    rooms[room].users = rooms[room].users.filter(u => u !== user);
+    // Sonra tekrar ekle
+    rooms[room].users.push(user);
+    
+    // Listeyi tüm odaya bildir
     io.to(room).emit("UPDATE_USER_LIST", rooms[room].users);
+    
+    console.log(`👤 [${room}] ${user} katıldı. Toplam: ${rooms[room].users.length}`);
   }
   // --- VİDEO EYLEMLERİ (SADE) ---
   socket.on("ACTION", (data) => {
@@ -72,14 +78,23 @@ io.on("connection", (socket) => {
   // 🆕🆕🆕 CHAT BİTİŞ 🆕🆕🆕
 
   // --- ÇIKIŞ ---
-  socket.on("disconnect", () => {
+  socket.on("disconnect", (reason) => {
+    console.log(`🔌 Bağlantı koptu: ${socket.username} - Sebep: ${reason}`);
+    
     const r = socket.currentRoom;
     if (r && rooms[r]) {
-      rooms[r].users = rooms[r].users.filter(u => u !== socket.username);
-      io.to(r).emit("UPDATE_USER_LIST", rooms[r].users);
-      
-      if (rooms[r].users.length === 0) {
-        delete rooms[r];
+      // Sadece transport close veya client disconnect'te listeden çıkar
+      // ping timeout gibi geçici kopmalarda bekleme süresi ver
+      if (reason === "transport close" || reason === "client namespace disconnect") {
+        rooms[r].users = rooms[r].users.filter(u => u !== socket.username);
+        io.to(r).emit("UPDATE_USER_LIST", rooms[r].users);
+        
+        console.log(`👋 [${r}] ${socket.username} ayrıldı. Kalan: ${rooms[r].users.length}`);
+        
+        if (rooms[r].users.length === 0) {
+          console.log(`🗑️ Oda silindi: ${r}`);
+          delete rooms[r];
+        }
       }
     }
   });
