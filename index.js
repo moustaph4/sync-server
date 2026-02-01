@@ -15,6 +15,8 @@ const io = new Server(httpServer, {
 });
 
 const rooms = {}; 
+// 🔥 YENİ: Tekrarlayan mesajları engellemek için geçici hafıza
+const lastMessages = {}; 
 
 console.log("🚀 Sunucu Başlatıldı...");
 
@@ -45,7 +47,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Ortak Giriş Mantığı
   function joinLogic(socket, room, user) {
     socket.join(room);
     socket.currentRoom = room;
@@ -64,11 +65,24 @@ io.on("connection", (socket) => {
     }
   });
 
-  // --- 🔥 YENİ EKLENEN KISIM: CHAT SİSTEMİ ---
+  // --- 🔥 GÜNCELLENEN CHAT SİSTEMİ (FİLTRELEMELİ) ---
   socket.on("SEND_CHAT", (data) => {
     if (socket.currentRoom) {
-      // Mesajı odadaki herkese gönder
-      io.to(socket.currentRoom).emit("RECEIVE_CHAT", data);
+      const room = socket.currentRoom;
+      
+      // Filtreleme Kontrolü:
+      // Eğer bu odaya kaydedilen son mesaj, şu an gelenle birebir aynıysa (zamanı dahil),
+      // bu bir "kopya" mesajdır (iframe'lerden gelen). Bunu yok sayıyoruz.
+      if (lastMessages[room] && 
+          lastMessages[room].text === data.text && 
+          lastMessages[room].username === data.username && 
+          lastMessages[room].time === data.time) {
+          return; // ⛔ KOPYAYI DURDUR
+      }
+
+      // Değilse, bu yeni bir mesajdır. Kaydet ve yayınla.
+      lastMessages[room] = data;
+      io.to(room).emit("RECEIVE_CHAT", data);
     }
   });
 
@@ -81,6 +95,7 @@ io.on("connection", (socket) => {
       
       if (rooms[r].users.length === 0) {
         delete rooms[r];
+        delete lastMessages[r]; // Oda kapanınca mesaj hafızasını da temizle
       }
     }
   });
