@@ -56,6 +56,9 @@ io.on("connection", (socket) => {
       rooms[room].users.push(user);
     }
     io.to(room).emit("UPDATE_USER_LIST", rooms[room].users);
+
+    // 🔊 VOICE: Odaya yeni biri geldi, diğerlerine haber ver
+    socket.to(room).emit("VOICE_USER_JOINED", { socketId: socket.id, username: user });
   }
 
   // --- VİDEO EYLEMLERİ ---
@@ -65,25 +68,46 @@ io.on("connection", (socket) => {
     }
   });
 
-  // --- 🔥 GÜNCELLENEN CHAT SİSTEMİ (FİLTRELEMELİ) ---
+  // --- 🔥 CHAT ---
   socket.on("SEND_CHAT", (data) => {
     if (socket.currentRoom) {
       const room = socket.currentRoom;
-      
-      // Filtreleme Kontrolü:
-      // Eğer bu odaya kaydedilen son mesaj, şu an gelenle birebir aynıysa (zamanı dahil),
-      // bu bir "kopya" mesajdır (iframe'lerden gelen). Bunu yok sayıyoruz.
       if (lastMessages[room] && 
           lastMessages[room].text === data.text && 
           lastMessages[room].username === data.username && 
           lastMessages[room].time === data.time) {
-          return; // ⛔ KOPYAYI DURDUR
+          return;
       }
 
-      // Değilse, bu yeni bir mesajdır. Kaydet ve yayınla.
       lastMessages[room] = data;
       io.to(room).emit("RECEIVE_CHAT", data);
     }
+  });
+
+  // ================================
+  // 🔊 VOICE CHAT (WEBRTC SİNYALLEŞME)
+  // ================================
+
+  socket.on("VOICE_OFFER", ({ targetId, offer }) => {
+    io.to(targetId).emit("VOICE_OFFER", {
+      from: socket.id,
+      username: socket.username,
+      offer
+    });
+  });
+
+  socket.on("VOICE_ANSWER", ({ targetId, answer }) => {
+    io.to(targetId).emit("VOICE_ANSWER", {
+      from: socket.id,
+      answer
+    });
+  });
+
+  socket.on("VOICE_ICE_CANDIDATE", ({ targetId, candidate }) => {
+    io.to(targetId).emit("VOICE_ICE_CANDIDATE", {
+      from: socket.id,
+      candidate
+    });
   });
 
   // --- ÇIKIŞ ---
@@ -92,10 +116,13 @@ io.on("connection", (socket) => {
     if (r && rooms[r]) {
       rooms[r].users = rooms[r].users.filter(u => u !== socket.username);
       io.to(r).emit("UPDATE_USER_LIST", rooms[r].users);
-      
+
+      // 🔊 VOICE: Odadakilere biri çıktı bilgisini ver
+      socket.to(r).emit("VOICE_USER_LEFT", { socketId: socket.id });
+
       if (rooms[r].users.length === 0) {
         delete rooms[r];
-        delete lastMessages[r]; // Oda kapanınca mesaj hafızasını da temizle
+        delete lastMessages[r];
       }
     }
   });
