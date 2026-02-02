@@ -9,14 +9,13 @@ app.get("/", (req, res) => res.send("✅ SYNC FHAMS SUNUCU AKTİF!!"));
 
 const io = new Server(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] },
-  transports: ['websocket', 'polling'], 
-  pingTimeout: 60000, 
-  pingInterval: 25000 
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
-const rooms = {}; 
-// 🔥 YENİ: Tekrarlayan mesajları engellemek için geçici hafıza
-const lastMessages = {}; 
+const rooms = {};
+const lastMessages = {};
 
 console.log("🚀 Sunucu Başlatıldı...");
 
@@ -24,7 +23,6 @@ io.on("connection", (socket) => {
   socket.currentRoom = null;
   socket.username = null;
 
-  // --- ODA OLUŞTURMA ---
   socket.on("CREATE_ROOM", ({ roomName, password, username }) => {
     if (rooms[roomName]) {
       socket.emit("JOIN_ERROR", "⚠️ BU ODA İSMİ KULLANILIYOR");
@@ -35,7 +33,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // --- ODAYA KATILMA ---
   socket.on("JOIN_ROOM", ({ roomName, password, username }) => {
     if (!rooms[roomName]) {
       socket.emit("JOIN_ERROR", "❌ BÖYLE BİR ODA YOK");
@@ -56,69 +53,48 @@ io.on("connection", (socket) => {
       rooms[room].users.push(user);
     }
     io.to(room).emit("UPDATE_USER_LIST", rooms[room].users);
-
-    // 🔊 VOICE: Odaya yeni biri geldi, diğerlerine haber ver
-    socket.to(room).emit("VOICE_USER_JOINED", { socketId: socket.id, username: user });
   }
 
-  // --- VİDEO EYLEMLERİ ---
   socket.on("ACTION", (data) => {
     if (socket.currentRoom) {
       socket.to(socket.currentRoom).emit("SYNC_ACTION", data);
     }
   });
 
-  // --- 🔥 CHAT ---
   socket.on("SEND_CHAT", (data) => {
     if (socket.currentRoom) {
       const room = socket.currentRoom;
-      if (lastMessages[room] && 
-          lastMessages[room].text === data.text && 
-          lastMessages[room].username === data.username && 
-          lastMessages[room].time === data.time) {
-          return;
-      }
+      if (
+        lastMessages[room] &&
+        lastMessages[room].text === data.text &&
+        lastMessages[room].username === data.username &&
+        lastMessages[room].time === data.time
+      ) return;
 
       lastMessages[room] = data;
       io.to(room).emit("RECEIVE_CHAT", data);
     }
   });
 
-  // ================================
-  // 🔊 VOICE CHAT (WEBRTC SİNYALLEŞME)
-  // ================================
-
-  socket.on("VOICE_OFFER", ({ targetId, offer }) => {
-    io.to(targetId).emit("VOICE_OFFER", {
-      from: socket.id,
-      username: socket.username,
-      offer
-    });
+  // 🔥🔥🔥 SES SİNYALİ (SADECE RELAY)
+  socket.on("VOICE_OFFER", (data) => {
+    socket.to(socket.currentRoom).emit("VOICE_OFFER", data);
   });
 
-  socket.on("VOICE_ANSWER", ({ targetId, answer }) => {
-    io.to(targetId).emit("VOICE_ANSWER", {
-      from: socket.id,
-      answer
-    });
+  socket.on("VOICE_ANSWER", (data) => {
+    socket.to(socket.currentRoom).emit("VOICE_ANSWER", data);
   });
 
-  socket.on("VOICE_ICE_CANDIDATE", ({ targetId, candidate }) => {
-    io.to(targetId).emit("VOICE_ICE_CANDIDATE", {
-      from: socket.id,
-      candidate
-    });
+  socket.on("VOICE_ICE", (data) => {
+    socket.to(socket.currentRoom).emit("VOICE_ICE", data);
   });
+  // 🔥🔥🔥
 
-  // --- ÇIKIŞ ---
   socket.on("disconnect", () => {
     const r = socket.currentRoom;
     if (r && rooms[r]) {
       rooms[r].users = rooms[r].users.filter(u => u !== socket.username);
       io.to(r).emit("UPDATE_USER_LIST", rooms[r].users);
-
-      // 🔊 VOICE: Odadakilere biri çıktı bilgisini ver
-      socket.to(r).emit("VOICE_USER_LEFT", { socketId: socket.id });
 
       if (rooms[r].users.length === 0) {
         delete rooms[r];
@@ -129,7 +105,6 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Sunucu ${PORT} portunda başlatıldı.`);
 });
